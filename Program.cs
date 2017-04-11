@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,6 +14,7 @@ using System.Data.OleDb;
 using System.Data;
 using System.Collections.Specialized;
 using System.Text.RegularExpressions;
+using HtmlAgilityPack;
 
 namespace sgmlWDM
 {
@@ -24,9 +25,9 @@ namespace sgmlWDM
         {
             //string fleet = "A310_600"; MD10_WDM
             //foreach (string fleet in (new[] { "A310_300", "A310_200", "A300_600", "777", "757", "767" }))
-            foreach (string fleet in (new[] { "MD11", "MD10" }))
+            WdmDecoder d = new WdmDecoder();
+            foreach (string fleet in (new[] { "777" }))
             {
-                WdmDecoder d = new WdmDecoder();
                 d.perpareSGML(@"C:\Users\795627\Desktop\" + fleet + "_WDM.sgm");
                 d.setDbName("wirelist_" + fleet.Replace("_", " "));
                 String wdmFile_dtd_closed = @"C:\Users\795627\Desktop\wdmFile_dtd_closed.xml";
@@ -35,27 +36,50 @@ namespace sgmlWDM
                 d.buildDatabase_table("equipment", cnames, "equipment.xml");
 
                 cnames = d.decode_wireList(wdmFile_dtd_closed);
-                d.buildDatabase_wireList("wirelist", cnames, "wires2.xml");
+                d.buildDatabase_wireList("wirelist", cnames, "wires.xml");
             }
         }
 
 
         public class WdmDecoder
         {
-
             public Hashtable equipmentLookUp = new Hashtable();
             public DataTable equipmentTable = new DataTable();
+
             private string connectionString;
+
             public string ConnectionString
             {
                 get
                 {
-                    return connectionString; 
+                    return connectionString;
                 }
                 set
                 {
-                    connectionString = "Provider=Microsoft.JET.OLEDB.4.0;Data Source='" + value+"'";
+                    connectionString = "Provider=Microsoft.JET.OLEDB.4.0;Data Source='" + value + "'";
                 }
+            }
+
+            public List<string> EmptyTags = new List<string>();
+
+            public WdmDecoder()
+            {
+                EmptyTags = new List<string>();
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("spanspec", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("colspec", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("grsymbol", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("sbeff", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("coceff", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("deleted", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("isempty", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("revst", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("revend", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("cocst", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("cocend", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("hotlink", HtmlElementFlag.Empty);
+                HtmlAgilityPack.HtmlNode.ElementsFlags.Add("aclist", HtmlElementFlag.Empty);
+                EmptyTags = HtmlAgilityPack.HtmlNode.ElementsFlags.Where(fd => ((HtmlElementFlag)fd.Value) == HtmlElementFlag.Empty).ToList().Select(fd => fd.Key).ToList();
+
             }
 
 
@@ -107,7 +131,7 @@ namespace sgmlWDM
                                 {
                                     val = "0";
                                 }
-                                
+
                                 val = val.Trim(new char[] { ':', '-' });
                                 val = val.Trim();
                                 val = val == "0" ? "00" : val;
@@ -128,7 +152,7 @@ namespace sgmlWDM
                     {
                         sqlCmd.ExecuteNonQuery();
                     }
-                    catch (OleDbException e) 
+                    catch (OleDbException e)
                     {
                         Console.WriteLine(e.Message);
                     }
@@ -142,43 +166,16 @@ namespace sgmlWDM
             {
                 OleDbConnection con = new OleDbConnection(this.ConnectionString);
                 OleDbCommand sqlCmd = con.CreateCommand();
-                sqlCmd.Parameters.Clear();                
+                sqlCmd.Parameters.Clear();
                 con.Open();
-                XmlReader wires = XmlReader.Create("wires2.xml");
+                XmlReader wires = XmlReader.Create("wires.xml");
 
-                //string[] cnmaes ={"actwire",
-                //                "wirecode",
-                //                "wirenbr",
-                //                "wireawg",
-                //                "wireclr",
-                //                "bundnbr",
-                //                "length",
-                //                "wtcode",
-                //                "wiretype",
-                //                "refint",
-                //                "fam",
-                //                "bundpnr",
-                //                "bunddesc",
-                //                "sensep",
-                //                "from_termtype",
-                //                "from_ein",
-                //                "from_termnbrtype",
-                //                "from_termnbr",
-                //                "from_shunt",
-                //                "from_termcode",
-                //                "to_termtype",
-                //                "to_ein",
-                //                "to_termnbrtype",
-                //                "to_termnbr",
-                //                "to_shunt",
-                //                "to_termcode",
-                //                "modcode","wireno",
-                //                "effrg"};
+
 
                 while (wires.EOF == false)
                 {
-                    sqlCmd.Parameters.Clear();   
-                    wires.ReadToFollowing("wire");                    
+                    sqlCmd.Parameters.Clear();
+                    wires.ReadToFollowing("wire");
                     if (wires.EOF == true)
                     {
                         break;
@@ -195,14 +192,14 @@ namespace sgmlWDM
                     {
 
                         if (wire.NodeType == XmlNodeType.Element)
-                        {                              
-                            if(cnmaes.Contains(wire.Name)== false)
+                        {
+                            if (cnmaes.Contains(wire.Name) == false)
                             {
                                 colname = "";
                                 wire.Read();
                                 continue;
                             }
-                            colname = wire.Name;    
+                            colname = wire.Name;
                         }
                         else if (wire.NodeType == XmlNodeType.Text)
                         {
@@ -234,110 +231,22 @@ namespace sgmlWDM
                 con.Close();
             }
 
-            protected void AutoCloseElementsInternal(SgmlReader reader, XmlWriter writer)
-            {
+       
 
-                object msgBody = reader.NameTable.Add("MSGBODY");
-
-                object previousElement = null;
-                Stack elementsWeAlreadyEnded = new Stack();
-                int idx = 0;
-                Stack openElements = new Stack();
-
-                {
-                    while (reader.Read())
-                    {
-                        idx++;
-                        switch (reader.NodeType)
-                        {
-                            case XmlNodeType.Element:
-                                previousElement = reader.LocalName;
-                                writer.WriteStartElement(reader.LocalName.ToLower());
-                                if (reader.HasAttributes)
-                                {
-                                    reader.MoveToFirstAttribute();
-                                }
-                                for (int attr_idx = 0; attr_idx < reader.AttributeCount; attr_idx++)
-                                {
-                                    
-                                    string attrName = reader.Name.ToLower();
-                                    string attrValue = reader.Value.Trim();
-                                    writer.WriteAttributeString(attrName, attrValue);                                    
-                                    if(reader.MoveToNextAttribute() == false)
-                                    {
-                                        break;
-                                    }
-                                }
-                                    
-                                openElements.Push(previousElement);
-                                break;
-                            case XmlNodeType.Text:
-                                if (openElements.Count > 0)
-                                {
-                                    if (String.IsNullOrEmpty(reader.Value)==false)
-                                    {
-
-                                        string dd = reader.Value.Trim();
-                                        byte s = (byte)dd[0];
-                                        if (s < 32)
-                                        {
-                                            Console.WriteLine("Skip Char " + dd);
-                                            writer.WriteString("...");
-                                        }
-                                        else
-                                        {
-                                            HttpUtility.HtmlEncode(dd);
-                                            writer.WriteString(dd);
-
-                                        }
-                                        if (previousElement != null && !previousElement.Equals(msgBody))
-                                        {
-
-                                            writer.WriteEndElement();
-                                            elementsWeAlreadyEnded.Push(previousElement);
-                                            openElements.Pop();
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Console.WriteLine("big problems?");
-                                }
-                                break;
-                            case XmlNodeType.EndElement:
-                                if (elementsWeAlreadyEnded.Count > 0
-                                    && Object.ReferenceEquals(elementsWeAlreadyEnded.Peek(),
-                                       reader.LocalName))
-                                {
-                                    elementsWeAlreadyEnded.Pop();
-                                }
-                                else
-                                {
-                                    writer.WriteEndElement();
-                                    openElements.Pop();
-                                }
-                                break;
-                            case XmlNodeType.Whitespace:
-                                break;
-                            default:
-                                writer.WriteNode(reader, false);
-                                break;
-                        }
-                    }
-                }
-
-            }
-            
             public string[] decode_equipmentList(String wdmFile_dtd_closed)
             {
                 List<NameValueCollection> wireList = new List<NameValueCollection>();
                 XmlReaderSettings settings = new XmlReaderSettings();
                 settings.DtdProcessing = DtdProcessing.Parse;
                 settings.XmlResolver = new XmlUrlResolver();
-                XmlReader xr = XmlReader.Create((new StreamReader(wdmFile_dtd_closed)).BaseStream, settings);
+
+
+
                 bool d = false;
+                XmlReader xr = XmlReader.Create((new StreamReader(wdmFile_dtd_closed)).BaseStream, settings);
                 d = xr.Read();
                 int equipCnt = 0;
+                d = xr.ReadToFollowing("wm");
                 d = xr.ReadToDescendant("eqiplist");
                 xr = xr.ReadSubtree();
                 d = xr.ReadToDescendant("eqrow");
@@ -346,7 +255,7 @@ namespace sgmlWDM
                 NameValueCollection wireData = new NameValueCollection();
                 while (d == true)
                 {
-                   wireData  = extractEquipmentInfor(xr, sw);
+                    wireData = extractEquipmentInfor(xr, sw);
                     d = xr.ReadToFollowing("eqrow");
                     equipCnt++;
                 }
@@ -363,6 +272,7 @@ namespace sgmlWDM
 
 
                 XmlReader wireInfo = wireRoot.ReadSubtree();
+                wireInfo.Read();
                 wireInfo.ReadToDescendant("effect");
 
                 string effrg = wireInfo.GetAttribute("effrg");
@@ -370,7 +280,7 @@ namespace sgmlWDM
 
                 NameValueCollection wireData = new NameValueCollection();
                 wireInfo.Read();
-                string currentNode = "";                
+                string currentNode = "";
                 while (wireInfo.EOF == false)
                 {
                     if (wireInfo.NodeType == XmlNodeType.Element)
@@ -379,7 +289,7 @@ namespace sgmlWDM
                         currentNode = wireInfo.Name;
 
                         if (currentNode == "location")
-                        {                          
+                        {
                             wireInfo.Read();
                             continue;
                         }
@@ -387,14 +297,20 @@ namespace sgmlWDM
                         {
                             wireInfo.Read();
                             continue;
-                        } 
+                        }
                         else if (currentNode == "ein")
                         {
                             if (wireInfo.GetAttribute("type") != null)
                             {
                                 wireData.Add("eq_type", wireInfo.GetAttribute("type").Trim());
                             }
-                        }                      
+                        }
+                        else if (EmptyTags.Contains(currentNode))
+                        {
+                            wireInfo.Read();
+                            continue;
+                        }
+
                         #endregion
                     }
                     else if (wireInfo.NodeType == XmlNodeType.Text)
@@ -419,8 +335,13 @@ namespace sgmlWDM
                         {
                             wireInfo.Read();
                             continue;
-                        }                       
+                        }
                         else if (currentNode == "hdiagnbr")
+                        {
+                            wireInfo.Read();
+                            continue;
+                        }
+                        else if (EmptyTags.Contains(currentNode))
                         {
                             wireInfo.Read();
                             continue;
@@ -456,6 +377,12 @@ namespace sgmlWDM
                     {
                         location = wireData["zone"] == null ? "" : String.Format("{0}", wireData["zone"].ToString());
                     }
+
+                    if (effrg != null)
+                    {
+                        effrg = expandeffetivity(effrg);
+                    }
+
                     wireData.Add("location", location);
                     wireData.Add("effrg", effrg);
                     sw.WriteLine("<eqrow>");
@@ -471,64 +398,72 @@ namespace sgmlWDM
 
                 return wireData;
             }
-            
-            public string[] decode_wireList(String wdmFile_dtd_closed) 
-            {                               
-                List<NameValueCollection> wireList = new List<NameValueCollection>();                
+
+            public string[] decode_wireList(String wdmFile_dtd_closed)
+            {
+                List<NameValueCollection> wireList = new List<NameValueCollection>();
                 XmlReaderSettings settings = new XmlReaderSettings();
+
                 settings.DtdProcessing = DtdProcessing.Parse;
                 settings.XmlResolver = new XmlUrlResolver();
                 XmlReader xr = XmlReader.Create((new StreamReader(wdmFile_dtd_closed)).BaseStream, settings);
                 bool d = false;
                 d = xr.Read();
                 int wireEntryCnt = 0;
+                d = xr.ReadToFollowing("wm");
                 d = xr.ReadToDescendant("extwlist");
                 xr = xr.ReadSubtree();
                 d = xr.ReadToDescendant("extwrow");
-                //StreamWriter sw = new StreamWriter("wires.xml",false);
                 StreamWriter sw = null;
-                
+                StreamWriter sw_hookup = null;
+
             retry:
                 try
                 {
-                    sw = new StreamWriter("wires2.xml", false);
+                    sw = new StreamWriter("wires.xml", false);
+                    sw_hookup = new StreamWriter("hookup.xml", false);
                 }
                 catch
                 {
                     System.Threading.Thread.Sleep(500);
                     goto retry;
                 }
-                
+
+                sw_hookup.WriteLine("<hookup>");
                 sw.WriteLine("<wires>");
                 NameValueCollection wireData = new NameValueCollection();
                 List<string> keys = new List<string>();
                 while (d == true)
-                {                    
-                    wireData = extractWireInfor(xr, sw);
+                {
+                    wireData = extractWireInfor(xr, sw, sw_hookup);
                     d = xr.ReadToFollowing("extwrow");
                     wireEntryCnt++;
                     keys.AddRange(wireData.Keys.Cast<string>().ToArray());
-                    keys = keys.Distinct().ToList() ;
+                    keys = keys.Distinct().ToList();
 
                 }
+
                 sw.WriteLine("</wires>");
+                sw_hookup.WriteLine("</hookup>");
+                sw_hookup.Close();
                 sw.Close();
                 xr.Close();
                 return keys.Distinct().ToArray();
             }
 
-            public NameValueCollection extractWireInfor(XmlReader wireRoot, StreamWriter sw)
+            public NameValueCollection extractWireInfor(XmlReader wireRoot, StreamWriter sw, StreamWriter sw_hookup)
             {
                 string revdate = wireRoot.GetAttribute("revdate");
                 string key = wireRoot.GetAttribute("key");
 
 
                 XmlReader wireInfo = wireRoot.ReadSubtree();
+                wireInfo.Read();
                 wireInfo.ReadToDescendant("effect");
 
                 string effrg = wireInfo.GetAttribute("effrg");
                 string efftype = wireInfo.GetAttribute("efftype");
-                
+
                 NameValueCollection wireData = new NameValueCollection();
                 wireInfo.Read();
                 string currentNode = "";
@@ -536,6 +471,7 @@ namespace sgmlWDM
                 string wireNumber = "";
                 while (wireInfo.EOF == false)
                 {
+                    #region MyRegion
                     if (wireInfo.NodeType == XmlNodeType.Element)
                     {
                         #region MyRegion
@@ -555,7 +491,7 @@ namespace sgmlWDM
                             wireInfo.Read();
                             continue;
                         }
-                        else if ((new string[] { "revst", "revend", "" }.Contains(currentNode)))
+                        else if ((EmptyTags.Contains(currentNode)))
                         {
                             wireInfo.Read();
                             continue;
@@ -572,7 +508,7 @@ namespace sgmlWDM
                             wireInfo.Read();
                             continue;
                         }
-                        else if ((new string[] { "length", "wiretype", "fam", "wirerte?", "bunddesc", "bundpnr", "modcode", "sensep" }).Contains(currentNode))
+                        else if ((new string[] { "length", "wiretype", "fam", "wirerte", "bunddesc", "bundpnr", "modcode", "sensep" }).Contains(currentNode))
                         {
                             preFix = "";
                         }
@@ -608,7 +544,7 @@ namespace sgmlWDM
                         {
                             string attr = wireInfo.GetAttribute("wtcode");
                             attr = attr == null ? "" : attr.Trim();
-                            if (wireData.GetValues("wtcode")!= null)
+                            if (wireData.GetValues("wtcode") != null)
                             {
                                 wireData["wtcode"] += ("/" + attr);
                             }
@@ -616,8 +552,8 @@ namespace sgmlWDM
                             {
                                 wireData.Add("wtcode", attr);
                             }
-                            
-                        } 
+
+                        }
                         #endregion
                     }
                     else if (wireInfo.NodeType == XmlNodeType.Text)
@@ -633,7 +569,12 @@ namespace sgmlWDM
                             wireInfo.Read();
                             continue;
                         }
-                        else if ((new string[] { "revst", "revend", "", "feedthru" }.Contains(currentNode)))
+                        else if ("feedthru" == currentNode)
+                        {
+                            wireInfo.Read();
+                            continue;
+                        }
+                        else if (EmptyTags.Contains(currentNode))
                         {
                             wireInfo.Read();
                             continue;
@@ -653,7 +594,7 @@ namespace sgmlWDM
                             wireInfo.Read();
                             continue;
                         }
-                      
+
                         string value = wireInfo.Value.ToString().Trim();
                         value = Regex.Replace(value, @"\s{2,100}", " ");
                         if (currentNode == "length")
@@ -675,7 +616,7 @@ namespace sgmlWDM
                         {
                             wireData.Add(currentNode, value);
                         }
-                     
+
                     }
                     else if (wireInfo.NodeType == XmlNodeType.Whitespace)
                     {
@@ -690,7 +631,12 @@ namespace sgmlWDM
                             wireInfo.Read();
                             continue;
                         }
-                        else if ((new string[] { "revst", "revend", "", "feedthru" }.Contains(currentNode)))
+                        else if ("feedthru" == currentNode)
+                        {
+                            wireInfo.Read();
+                            continue;
+                        }
+                        else if (EmptyTags.Contains(currentNode))
                         {
                             wireInfo.Read();
                             continue;
@@ -710,21 +656,26 @@ namespace sgmlWDM
                             wireInfo.Read();
                             continue;
                         }
-                       
+
 
                         if (wireData[currentNode] == null)
                         {
                             wireData.Add(currentNode, "");
                         }
                         else if (wireData.GetValues(currentNode).Length == 0)
-                        { 
+                        {
                             wireData.Add(currentNode, "");
                         }
                     }
-                    
+
                     wireInfo.Read();
+                    #endregion
                 }
-                
+                string effrgFull = "";
+                if (effrg != null)
+                {
+                    effrgFull = expandeffetivity(effrg);
+                }
                 if (wireData["wirenbr"] != null)
                 {
                     if (!wireData["wirenbr"].Trim().StartsWith(wireData["bundnbr"].Trim()))
@@ -737,15 +688,29 @@ namespace sgmlWDM
                     }
                     wireNumber = wireNumber.Trim(new char[] { '-', ' ' }).Trim();
                     wireData.Add("wireno", wireNumber);
-                    wireData.Add("effrg", effrg);
+                    wireData.Add("effrg", effrgFull);
                     sw.WriteLine("<wire>");
                     foreach (string nName in wireData.Keys)
                     {
-                        string val = wireData[nName] == null? "ALL" : wireData[nName].ToString();
+                        string val = wireData[nName] == null ? "ALL" : wireData[nName].ToString();
                         val = HttpUtility.HtmlEncode(val.Trim());
                         sw.WriteLine(String.Format("<{0}>{1}</{0}>", nName.Trim(), val.Trim()));
                     }
                     sw.WriteLine("</wire>");
+                }
+                else if (wireData["actwire"] == "sparepin")
+                {
+
+                    wireData.Add("effrg", effrgFull);
+                    sw_hookup.WriteLine("<item>");
+                    foreach (string nName in wireData.Keys)
+                    {
+                        string val = wireData[nName] == null ? "ALL" : wireData[nName].ToString();
+                        val = HttpUtility.HtmlEncode(val.Trim());
+                        sw_hookup.WriteLine(String.Format("<{0}>{1}</{0}>", nName.Trim(), val.Trim()));
+                    }
+                    sw_hookup.WriteLine(String.Format("<{0}>{1}</{0}>", "status", "unused"));
+                    sw_hookup.WriteLine("</item>");
                 }
 
 
@@ -765,7 +730,7 @@ namespace sgmlWDM
 
             public void perpareSGML(string wdmFile)
             {
-                
+
                 String wdmFile_dtd = @"C:\Users\795627\Desktop\wdmFile_dtd.xml";
                 String wdmFile_dtd_closed = @"C:\Users\795627\Desktop\wdmFile_dtd_closed.xml";
 
@@ -775,33 +740,65 @@ namespace sgmlWDM
                 char[] buff = new char[1000];
                 while (sr.EndOfStream == false)
                 {
-                    int len = sr.Read(buff,0,buff.Length );
+                    int len = sr.Read(buff, 0, buff.Length);
                     sw.Write(buff, 0, len);
                 }
                 sw.Close();
-
-
-                XmlReaderSettings settings = new XmlReaderSettings();
-                settings.DtdProcessing = DtdProcessing.Parse;
-                settings.XmlResolver = new XmlUrlResolver();
-                Sgml.SgmlReader sgmlReader = new Sgml.SgmlReader();
-                sgmlReader.InputStream = new StreamReader(wdmFile_dtd);
-
-                XmlReader xr = SgmlReader.Create((new StreamReader(wdmFile_dtd)).BaseStream, settings);
-
-                XmlWriterSettings xwset = new XmlWriterSettings();
-                xwset.Indent = true;
-                xwset.IndentChars = "\t";
-                xwset.NewLineChars = "\r\n";
-                xwset.ConformanceLevel = ConformanceLevel.Auto;
-                XmlWriter xw = XmlWriter.Create(wdmFile_dtd_closed, xwset);
-                AutoCloseElementsInternal(sgmlReader, xw);
-                xw.Close();
-
-               
+                sr.Close();
+                closeSelfClosing(wdmFile_dtd, wdmFile_dtd_closed);
 
 
             }
+
+
+            void closeSelfClosing(string filepath_in, string filepath_out)
+            {
+
+                StreamReader strR = new StreamReader(filepath_in);
+                using (StreamWriter strW = new StreamWriter(filepath_out, false))
+                {
+                    while (!strR.EndOfStream)
+                    {
+                        Console.Write("\r" + (100 * strR.BaseStream.Position / strR.BaseStream.Length).ToString());
+                        GC.Collect();
+                        List<bool> boos = Enumerable.Repeat(true, 2550).ToList();
+                        List<string> lines = boos.Select(fd => !strR.EndOfStream ? strR.ReadLine() : "").ToList();
+                        string block = string.Join("\r\n", lines).Trim();
+                        block = block.Replace("\r\n>", " >");
+                        foreach (string tagname in EmptyTags)
+                        {
+                            block = Regex.Replace(block, @"<(?<a>" + tagname + "[^>]*?)>", delegate(Match m)
+                            {
+                                if (m.Groups["a"].Value.Trim().EndsWith("/"))
+                                {
+                                    return m.Value;
+                                }
+                                else
+                                {
+                                    string sd = string.Format("<{0}/>", m.Groups["a"].Value);
+                                    return sd;
+                                }
+                            }, RegexOptions.IgnoreCase);
+                        }
+                        strW.WriteLine(block);
+                    }
+                    strR.Close();
+                    strW.Close();
+                }
+            }
+
+
+            string expandeffetivity(string effrg)
+            {
+                List<string> range = effrg.Split(new string[] { " " }, StringSplitOptions.RemoveEmptyEntries).ToList();
+
+                MatchCollection rangeUnits = Regex.Matches(effrg, @"(?<a>\d{3})(?<b>\d{3})");
+
+                List<int> tails = rangeUnits.Cast<Match>().SelectMany(fd => Enumerable.Range(int.Parse(fd.Groups["a"].Value), 1 + int.Parse(fd.Groups["b"].Value) - int.Parse(fd.Groups["a"].Value))).ToList();
+                return String.Join(",", tails);
+            }
+
         }
+
     }
 }
